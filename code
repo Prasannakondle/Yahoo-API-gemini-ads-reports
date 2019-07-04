@@ -1,0 +1,101 @@
+from urllib.request import urlopen
+import json
+import datetime
+from datetime import date, timedelta, time
+import response
+from yahoo_oauth import OAuth2
+from json import dumps
+import csv
+import pandas as pd
+import time
+import numpy as np
+import os
+from datetime import datetime
+
+date_ = datetime.today().strftime('%Y-%m-%d')
+
+oauth = OAuth2(None, None, from_file='/data/rpt/YAHOO_API_DPA/credentials/credentials2.json')
+
+if not oauth.token_is_valid():
+    oauth.refresh_access_token()
+	
+	
+ # get all accounts
+response = oauth.session.get("https://api.gemini.yahoo.com/v3/rest/advertiser/")
+data = response.content
+print(data)
+
+
+jdata = json.loads(data)
+for j in jdata['response']:
+    print("{} {}".format(j['id'], j['advertiserName']))
+
+# get advertiser data
+advertiser_id = Your advertiser id
+report_date_from = str(date.today() - timedelta(days=1))
+report_date_to = str(date.today())
+
+# get advertiser data
+# advertiser_id = xxxxx
+#report_date_from = "2018-05-21"
+#report_date_to = "2019-05-23"
+payload = {"cube": "performance_stats",
+           "fields": [
+                {"field": "Advertiser ID"},
+		{"field": "Advertiser Name"},
+                {"field": "Day"},
+                {"field": "Campaign Name"},
+               {"field": "Impressions"},
+               {"field": "Clicks"},
+               {"field": "Spend"},
+                {"field": "Post Click Conversions"},
+                {"field": "Device Type"},
+           ],
+           "filters": [
+               {"field": "Advertiser ID", "operator": "=", "value": advertiser_id},
+               {"field": "Day", "operator": "between", "from": report_date_from, "to": report_date_to}
+           ]}
+
+response = oauth.session.post("https://api.admanager.yahoo.com/v3/rest/reports/custom?reportFormat=json", json=payload)
+print(response.content)
+
+jdata = json.loads(response.content)
+job_id = jdata['response']['jobId']
+
+# you will need to add some loop and waits before the report is ready
+time.sleep(60)
+
+
+url = "https://api.gemini.yahoo.com/v1/rest/reports/custom/{}?advertiserId={}".format(job_id , advertiser_id)
+response = oauth.session.get(url)
+print(response.content)
+
+
+# report will be returned as url
+
+rdata = json.loads(response.content)
+print(rdata)
+if 'status' in rdata['response'] and rdata['response']['status'] == 'completed':
+    report = urlopen(rdata['response']['jobResponse']).read()
+    print(report)
+    report = json.loads(report.decode('utf-8'))
+len(report['rows'])
+
+report['rows'][0]
+fields=[]
+for temp in report['fields']:
+    fields.append(temp['fieldName'])
+	
+list_main=[]
+
+for nos in range(len(report['rows'])):
+    dict_temp={}
+    i=0
+    for nos_1 in range(len(fields)):
+        dict_temp[fields[nos_1]]=report['rows'][nos][i]
+        i+=1
+    list_main.append(dict_temp)
+list_main
+dataframe = pd.DataFrame(list_main)
+## Saving the dataframe to a csv file
+dataframe.to_csv("/data/rpt/YAHOO_API_DPA/data/YahooAPI_costload{}.csv".format(date_),index=False)
